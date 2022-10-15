@@ -11,16 +11,26 @@ Servo rightBack;
 
 //setting
 int statusmach = 0;
-boolean connectwifi = false;
+boolean connectwifi = true;
 boolean autocontrol = false;
 boolean linenotify = false;
 char IRtext[20];
 
 int walkingdelay = 1;
 int servoLegTarget[4] = {90, 90, 90, 90};
+int bodyangle = 90;
+
+//barking
+int melody1[] = {196, 196, 31};
+int noteDurations1[] = {8, 8, 4};
+int melody2[] = {31, 196, 104, 196, 104, 196, 31};
+int noteDurations2[] = {2, 8, 16, 8, 16, 8, 4};
+int melody3[] = {31, 196};
+int noteDurations3[] = {1, 8};
 
 //----------------INFRARED PART----------------
 const uint8_t IR = A0;
+const uint8_t speaker = D2;
 
 //-----------INTERNET CONNECTION PART-----------
 const char* ssid = "kkkkk";
@@ -57,6 +67,10 @@ void reconnect() {
     if (client.connect(mqtt_Client, mqtt_username, mqtt_password)) {
       Serial.println("connected");
       client.subscribe("@msg/statusmach");
+      client.subscribe("@msg/autocontrol");
+      client.subscribe("@msg/linenotify");
+      client.subscribe("@msg/barking");
+      client.subscribe("@msg/control");
     }
     else {
       Serial.print("failed, rc=");
@@ -80,6 +94,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if(String(topic) == "@msg/statusmach") {
     if (message == "standing"){
       Serial.println("standing");
+      turn(90);
       statusmach = 0;
 //      client.publish("@shadow/data/update", "{\"data\" : {\"led\" : \"on\"}}");
     }
@@ -111,6 +126,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
     else if(message == "off" && linenotify){
       Serial.println("Toggle off Line Notify");
       linenotify = false;
+    }
+  }
+  else if(String(topic) == "@msg/barking") {
+    Serial.println("barking");
+    barking();
+  }
+  else if(String(topic) == "@msg/control") {
+    if (message == "left"){
+      turn(45);
+      Serial.println("turn left");
+    }
+    else if(message == "straight"){
+      turn(90);
+      Serial.println("turn straight");
+    }
+    else if(message == "right"){
+      turn(145);
+      Serial.println("turn right");
     }
   }
 }
@@ -156,7 +189,7 @@ void setup()
   Serial.begin(115200);
   
   //SERVO PART
-//  body.attach(16, 500, 2500); //D1
+  body.attach(16, 500, 2500); //D0
   leftFront.attach(14, 500, 2500); //D5
   rightFront.attach(12, 500, 2500); //D6
   leftBack.attach(13, 500, 2500); //D7
@@ -169,6 +202,7 @@ void setup()
 
   //PIN AND VARIABLE SETTING
   pinMode(IR, INPUT);
+  pinMode(speaker, OUTPUT);
 }
 
 //Leg State Function
@@ -246,7 +280,7 @@ void walking(){
 }
 
 void sitting(){
-  if(!isState(90, 90, 180, 180)){
+  if(!isState(90, 90, 170, 170)){
     legMove("l", "f", 90);
     legMove("r", "f", 90);
     legMove("l", "b", 90);
@@ -263,6 +297,45 @@ void sitting(){
   }
 }
 
+void barking(){
+  int randnum = random(3);
+  if(randnum == 0){
+    for (int thisNote = 0; thisNote < 3; thisNote++) {
+      int noteDuration = 1000/noteDurations1[thisNote];
+      tone(speaker, melody1[thisNote], noteDuration); 
+      delay(noteDuration * 4 / 3);
+    }
+  }
+  else if(randnum == 1){
+    for (int thisNote = 0; thisNote < 7; thisNote++) {
+      int noteDuration = 1000/noteDurations2[thisNote];
+      tone(speaker, melody2[thisNote], noteDuration); 
+      delay(noteDuration * 4 / 3);
+    }
+  }
+  else{
+    for (int thisNote = 0; thisNote < 2; thisNote++) {
+      int noteDuration = 1000/noteDurations3[thisNote];
+      tone(speaker, melody3[thisNote], noteDuration); 
+      delay(noteDuration * 4 / 3);
+    }
+  }
+}
+
+void turn(int legangle){
+//  if(bodyangle >= legangle){
+//    for(int i = bodyangle; i<legangle; i--){
+//      body.write(i);
+//    }
+//  }
+//  else{
+//    for(int i = bodyangle; i>legangle; i++){
+//      body.write(i);
+//    }
+//  }
+  body.write(legangle);
+  bodyangle = legangle;
+}
 
 /////////////////////////////////////////////////////////////////////////////
 int infraread = 0;
@@ -303,6 +376,7 @@ void loop() {
     legMove("r", "f", 90);
     legMove("l", "b", 90);
     legMove("r", "b", 90);
+    turn(90);
     changeTarget(90, 90, 90, 90);
   }
   else if(statusmach == 1){           //Sitting
