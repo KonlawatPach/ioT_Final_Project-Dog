@@ -14,6 +14,8 @@ int statusmach = 0;
 boolean connectwifi = true;
 boolean autocontrol = false;
 boolean linenotify = false;
+
+char prevIRtext[20];
 char IRtext[20];
 
 int walkingdelay = 1;
@@ -43,6 +45,7 @@ const char* mqtt_password = "*10MmBzNpOF5R3k9Ll49zs73gzoLKrFK";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+char msg[100];
 
 void internet_connection(){
   Serial.println();
@@ -71,6 +74,7 @@ void reconnect() {
       client.subscribe("@msg/linenotify");
       client.subscribe("@msg/barking");
       client.subscribe("@msg/control");
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"standing\"}}");
     }
     else {
       Serial.print("failed, rc=");
@@ -93,37 +97,43 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if(String(topic) == "@msg/statusmach") {
     if (message == "standing"){
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"standing\"}}");
       Serial.println("standing");
       turn(90);
       statusmach = 0;
-//      client.publish("@shadow/data/update", "{\"data\" : {\"led\" : \"on\"}}");
     }
     else if (message == "sitting") {
       Serial.println("sitting");
-//      client.publish("@shadow/data/update", "{\"data\" : {\"led\" : \"off\"}}");
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"sitting\"}}");
       statusmach = 1;
     }
     else if (message == "walking") {
       Serial.println("walking");
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"walking\"}}");
       statusmach = 2;
     }
   }
   else if(String(topic) == "@msg/autocontrol") {
     if (message == "on" && !autocontrol){
+      client.publish("@shadow/data/update", "{\"data\" : {\"autocontrol\" : true}}");
       Serial.println("Toggle on AutoControl Mode");
       autocontrol = true;
     }
     else if(message == "off" && autocontrol){
+      client.publish("@shadow/data/update", "{\"data\" : {\"autocontrol\" : false}}");
       Serial.println("Toggle off AutoControl Mode");
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"sitting\"}}");
       autocontrol = false;
     }
   }
   else if(String(topic) == "@msg/linenotify") {
     if (message == "on" && !linenotify){
+      client.publish("@shadow/data/update", "{\"data\" : {\"notify\" : true}}");
       Serial.println("Toggle on Line Notify");
       linenotify = true;
     }
     else if(message == "off" && linenotify){
+      client.publish("@shadow/data/update", "{\"data\" : {\"notify\" : false}}");
       Serial.println("Toggle off Line Notify");
       linenotify = false;
     }
@@ -323,16 +333,6 @@ void barking(){
 }
 
 void turn(int legangle){
-//  if(bodyangle >= legangle){
-//    for(int i = bodyangle; i<legangle; i--){
-//      body.write(i);
-//    }
-//  }
-//  else{
-//    for(int i = bodyangle; i>legangle; i++){
-//      body.write(i);
-//    }
-//  }
   body.write(legangle);
   bodyangle = legangle;
 }
@@ -367,31 +367,45 @@ void loop() {
 
   //auto control mode
   if(autocontrol){
-    //auto control code
-  }
-  
-  //leg control
-  if(statusmach == 0){                //Standing
-    legMove("l", "f", 90);
-    legMove("r", "f", 90);
-    legMove("l", "b", 90);
-    legMove("r", "b", 90);
-    turn(90);
-    changeTarget(90, 90, 90, 90);
-  }
-  else if(statusmach == 1){           //Sitting
-    sitting();
-  }
-  else if(statusmach == 2){           //Walking
-    walking();
+    if(strcmp(IRtext, "Warning") == 0){
+      sitting();
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"sitting\"}}");
+      delay(2000);
+    }else{
+      walking();
+      client.publish("@shadow/data/update", "{\"data\" : {\"statusmach\" : \"walking\"}}");
+    }
+  }else{
+    //leg control
+    if(statusmach == 0){                //Standing
+      legMove("l", "f", 90);
+      legMove("r", "f", 90);
+      legMove("l", "b", 90);
+      legMove("r", "b", 90);
+      turn(90);
+      changeTarget(90, 90, 90, 90);
+    }
+    else if(statusmach == 1){           //Sitting
+      sitting();
+    }
+    else if(statusmach == 2){           //Walking
+      walking();
+    } 
   }
 
   //infrared
   if(infraread > 5 || statusmach == 2){
     readDistance();
     infraread = 0;
+    if(prevIRtext != IRtext){
+      String data = "{\"data\" : {\"distance\" : \"" + String(IRtext) + "\"}}";
+      data.toCharArray(msg, (data.length() + 1));
+      client.publish("@shadow/data/update", msg);
+      strcpy (prevIRtext, IRtext);
+    }
   }else{
     infraread++;
   }
+  
   delay(100);
 }
