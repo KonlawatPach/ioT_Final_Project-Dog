@@ -9,10 +9,14 @@ Servo rightFront;
 Servo leftBack;
 Servo rightBack;
 
+//setting
 int statusmach = 0;
+boolean connectwifi = false;
+boolean autocontrol = false;
+boolean linenotify = false;
+char IRtext[20];
 
 int walkingdelay = 1;
-int servoLegValue[4] = {90, 90, 90, 90};
 int servoLegTarget[4] = {90, 90, 90, 90};
 
 //----------------INFRARED PART----------------
@@ -89,6 +93,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
       statusmach = 2;
     }
   }
+  else if(String(topic) == "@msg/autocontrol") {
+    if (message == "on" && !autocontrol){
+      Serial.println("Toggle on AutoControl Mode");
+      autocontrol = true;
+    }
+    else if(message == "off" && autocontrol){
+      Serial.println("Toggle off AutoControl Mode");
+      autocontrol = false;
+    }
+  }
+  else if(String(topic) == "@msg/linenotify") {
+    if (message == "on" && !linenotify){
+      Serial.println("Toggle on Line Notify");
+      linenotify = true;
+    }
+    else if(message == "off" && linenotify){
+      Serial.println("Toggle off Line Notify");
+      linenotify = false;
+    }
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -97,15 +121,17 @@ void readDistance(){
   int dist = analogRead(IR);
   dist = map(dist, 50, 500, 255, 0);
   dist = constrain(dist, 0, 255);
+
+  int divisor = map(dist, 0, 255, 10, 3);
+
   if(dist <= 120){                              //14 cm
-    Serial.println("ใกล้มากๆ");
+    strcpy (IRtext, "Warning");
   }
   else{
-    dist = (dist/2.7);
-    Serial.print(dist);
-    Serial.println(" cm");
+    dist = dist/divisor;
+    itoa(dist, IRtext, 10);
   }
-  Serial.println(dist);
+  Serial.println(IRtext);
 }
 
 void legMove(char* leftright, char* frontback, int angle)
@@ -137,7 +163,9 @@ void setup()
   rightBack.attach(15, 500, 2500); //D8
 
   // INTERNET PART
-  internet_connection();
+  if(connectwifi){
+    internet_connection();
+  }
 
   //PIN AND VARIABLE SETTING
   pinMode(IR, INPUT);
@@ -231,43 +259,65 @@ void sitting(){
       legMove("l", "f", i);
       legMove("r", "f", i);
     }
-    changeTarget(90, 90, 180, 180);
+    changeTarget(90, 90, 170, 170);
   }
 }
 
 
 /////////////////////////////////////////////////////////////////////////////
+int infraread = 0;
 void loop() {
-  if (!client.connected()) {
-    reconnect();
+  if(connectwifi){
+    if (!client.connected()) {
+      reconnect();
+    }
+    client.loop();
+    long now = millis();
   }
-  client.loop();
-  long now = millis();
   
+  //serial monitor control
   if (Serial.available() > 0){
     char data = Serial.read();
     if (data == '0'){
       statusmach = 0;
+      Serial.println("standing");
     }
     else if (data == '1'){
       statusmach = 1;
+      Serial.println("sitting");
     }
     else if (data == '2'){
       statusmach = 2;
+      Serial.println("walking");
     }
   }
+
+  //auto control mode
+  if(autocontrol){
+    //auto control code
+  }
   
-  if(statusmach == 0){
+  //leg control
+  if(statusmach == 0){                //Standing
     legMove("l", "f", 90);
     legMove("r", "f", 90);
     legMove("l", "b", 90);
     legMove("r", "b", 90);
     changeTarget(90, 90, 90, 90);
   }
-  else if(statusmach == 1){
+  else if(statusmach == 1){           //Sitting
     sitting();
   }
-  else if(statusmach == 2){
+  else if(statusmach == 2){           //Walking
     walking();
   }
+
+  //infrared
+  if(infraread > 5 || statusmach == 2){
+    readDistance();
+    infraread = 0;
+  }else{
+    infraread++;
+  }
+  delay(100);
 }
