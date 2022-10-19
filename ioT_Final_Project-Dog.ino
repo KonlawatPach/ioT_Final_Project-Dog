@@ -35,8 +35,10 @@ const uint8_t IR = A0;
 const uint8_t speaker = D2;
 
 //-----------INTERNET CONNECTION PART-----------
-const char* ssid = "kkkkk";
-const char* password = "999999998";
+//const char* ssid = "kkkkk";
+//const char* password = "999999998";
+const char* ssid = "IoT Lab B";
+const char* password = "csiot335";
 const char* mqtt_server = "broker.netpie.io";
 const int mqtt_port = 1883;
 const char* mqtt_Client = "4046bf10-81a3-4a9d-a7f8-9ecec5451809";
@@ -200,7 +202,7 @@ void setup()
   
   //SERVO PART
   body.attach(16, 500, 2500); //D0
-  leftFront.attach(14, 500, 2500); //D5
+  leftFront.attach(14, 500, 2600); //D5
   rightFront.attach(12, 500, 2500); //D6
   leftBack.attach(13, 500, 2500); //D7
   rightBack.attach(15, 500, 2500); //D8
